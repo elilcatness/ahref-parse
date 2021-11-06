@@ -1,7 +1,7 @@
 import os
 import time
-from random import randint
 from datetime import datetime as dt
+from random import randint
 
 from dotenv import load_dotenv
 from selenium.common.exceptions import NoSuchElementException, ElementClickInterceptedException, \
@@ -34,6 +34,8 @@ def auth(driver: Chrome, login: str, password: str):
 
 
 def main():
+    # is_data_new = input('Рассматривать ли новые данные? (y/n) ').lower() == 'y'
+    is_data_new = False
     with open(os.getenv('domains_filename'), encoding='utf-8') as f:
         lines = f.readlines()
         if not lines:
@@ -59,14 +61,22 @@ def main():
         if not cookies:
             raise CookiesExtractionFailedException(
                 f'Не удалось извлечь cookies с {os.getenv("base_url") + domain}')
-        write_data(get_data(os.getenv('api_url'), domain, headers=HEADERS, cookies=cookies),
-                   output_filename, 'w')
-        print(f'[{dt.now().strftime("%H:%M:%S")}] 1/{domains_count} записано [{domain}]')
+        data = get_data(api_url if not is_data_new else os.getenv('base_new_url'), domain,
+                        headers=HEADERS, cookies=cookies, is_data_new=is_data_new)
+        if not data:
+            print(f'[{dt.now().strftime("%H:%M:%S")}] {domain} пуст')
+        else:
+            write_data(data, output_filename, 'w')
+            print(f'[{dt.now().strftime("%H:%M:%S")}] 1/{domains_count} записано [{domain}]')
         for i in range(2, domains_count + 1):
             domain = f.readline().strip()
-            write_data(get_data(api_url, domain, headers=HEADERS, cookies=cookies),
-                       output_filename, 'a')
-            print(f'[{dt.now().strftime("%H:%M:%S")}] {i}/{domains_count} записано [{domain}]')
+            data = get_data(api_url if not is_data_new else os.getenv('base_new_url'),
+                            domain, headers=HEADERS, cookies=cookies, is_data_new=is_data_new)
+            if not data:
+                print(f'[{dt.now().strftime("%H:%M:%S")}] {domain} пуст')
+            else:
+                write_data(data, output_filename, 'a')
+                print(f'[{dt.now().strftime("%H:%M:%S")}] {i}/{domains_count} записано [{domain}]')
 
 
 if __name__ == '__main__':
