@@ -33,8 +33,22 @@ def auth(driver: Chrome, login: str, password: str):
         raise AuthorizationFailedException(f'Не удалось нажать на кнопку авторизации [{e.__class__.__name__}]')
 
 
+def ask_mode(modes: list):
+    try:
+        mode_idx = int(input('Укажите цифру для какого типа соответствия собираем данные:\n' +
+                             '\n'.join([f'{i} - {modes[i - 1]}' for i in range(1, len(modes) + 1)]) + '\n')) - 1
+    except ValueError:
+        return print('Неверный формат')
+    if mode_idx >= len(modes):
+        return print(f'Число должно быть от 1 до {len(modes)}')
+    return modes[mode_idx]
+
+
 def main():
-    # is_data_new = input('Рассматривать ли новые данные? (y/n) ').lower() == 'y'
+    modes = os.getenv('modes').split(';')
+    if not modes:
+        return print('Список типов соответствия пуст в .env')
+    mode = ask_mode(modes)
     is_data_new = False
     with open(os.getenv('domains_filename'), encoding='utf-8') as f:
         lines = f.readlines()
@@ -57,12 +71,11 @@ def main():
     output_filename = os.getenv('output_filename')
     with open(os.getenv('domains_filename'), encoding='utf-8') as f:
         domain = f.readline().strip()
-        cookies = get_cookies(driver, os.getenv('base_url'), domain, api_url)
+        cookies = get_cookies(driver, os.getenv('base_url') % mode, domain, api_url)
         if not cookies:
             raise CookiesExtractionFailedException(
-                f'Не удалось извлечь cookies с {os.getenv("base_url") + domain}')
-        data = get_data(api_url if not is_data_new else os.getenv('base_new_url'), domain,
-                        headers=HEADERS, cookies=cookies, is_data_new=is_data_new)
+                f'Не удалось извлечь cookies с {(os.getenv("base_url") % mode) + domain}')
+        data = get_data(api_url, domain, mode, headers=HEADERS, cookies=cookies, is_data_new=is_data_new)
         if not data:
             print(f'[{dt.now().strftime("%H:%M:%S")}] {domain} пуст')
         else:
@@ -70,8 +83,7 @@ def main():
             print(f'[{dt.now().strftime("%H:%M:%S")}] 1/{domains_count} записано [{domain}]')
         for i in range(2, domains_count + 1):
             domain = f.readline().strip()
-            data = get_data(api_url if not is_data_new else os.getenv('base_new_url'),
-                            domain, headers=HEADERS, cookies=cookies, is_data_new=is_data_new)
+            data = get_data(api_url, domain, mode, headers=HEADERS, cookies=cookies, is_data_new=is_data_new)
             if not data:
                 print(f'[{dt.now().strftime("%H:%M:%S")}] {domain} пуст')
             else:

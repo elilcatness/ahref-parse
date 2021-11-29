@@ -40,11 +40,11 @@ def _get_dates_for_api():
     compared_with_date = actual_date + relativedelta(months=-1)
     return actual_date.isoformat(), compared_with_date.isoformat()
 
-def get_data(url: str, domain: str, headers: dict, cookies: dict, is_data_new=False):
+def get_data(url: str, domain: str, mode: str, headers: dict, cookies: dict, is_data_new=False):
     if not is_data_new:
         actual, compared_with = _get_dates_for_api()
         response = requests.post(url, json={'args': {
-            'mode': 'subdomains', 'protocol': 'both', 'reportMode':
+            'mode': mode, 'protocol': 'both', 'reportMode':
                 ['Compared', {'actual': actual, 'comparedWith': compared_with}],
             'url': domain}}, headers=headers, cookies=cookies)
         if response.status_code != 200:
