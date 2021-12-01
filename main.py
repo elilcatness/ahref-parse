@@ -49,12 +49,13 @@ def main():
     if not modes:
         return print('Список типов соответствия пуст в .env')
     mode = ask_mode(modes)
-    is_data_new = False
+    if not mode:
+        exit(-1)
     with open(os.getenv('domains_filename'), encoding='utf-8') as f:
-        lines = f.readlines()
-        if not lines:
+        domains = f.readlines()
+        if not domains:
             raise FileIsEmptyException(f'Файл {os.getenv("domains_filename")} пуст')
-        domains_count = len(lines)
+        domains_count = len(domains)
     driver = get_driver()
     with open(os.getenv('credentials_filename'), encoding='utf-8') as f:
         try:
@@ -66,29 +67,14 @@ def main():
     if driver.current_url == os.getenv('login_url'):
         auth(driver, login, password)
     print('Авторизация прошла успешно...')
-    print('Получаем cookies с выдачи по первому домену для дальнейшей работы с API...')
-    api_url = os.getenv('api_url')
     output_filename = os.getenv('output_filename')
-    with open(os.getenv('domains_filename'), encoding='utf-8') as f:
-        domain = f.readline().strip()
-        cookies = get_cookies(driver, os.getenv('base_url') % mode, domain, api_url)
-        if not cookies:
-            raise CookiesExtractionFailedException(
-                f'Не удалось извлечь cookies с {(os.getenv("base_url") % mode) + domain}')
-        data = get_data(api_url, domain, mode, headers=HEADERS, cookies=cookies, is_data_new=is_data_new)
+    for i, domain in enumerate(domains):
+        data = get_data(driver, os.getenv('base_url'), domain, mode)
         if not data:
             print(f'[{dt.now().strftime("%H:%M:%S")}] {domain} пуст')
         else:
-            write_data(data, output_filename, 'w')
-            print(f'[{dt.now().strftime("%H:%M:%S")}] 1/{domains_count} записано [{domain}]')
-        for i in range(2, domains_count + 1):
-            domain = f.readline().strip()
-            data = get_data(api_url, domain, mode, headers=HEADERS, cookies=cookies, is_data_new=is_data_new)
-            if not data:
-                print(f'[{dt.now().strftime("%H:%M:%S")}] {domain} пуст')
-            else:
-                write_data(data, output_filename, 'a')
-                print(f'[{dt.now().strftime("%H:%M:%S")}] {i}/{domains_count} записано [{domain}]')
+            write_data(data, output_filename, 'a')
+            print(f'[{dt.now().strftime("%H:%M:%S")}] {i + 1}/{domains_count} записано [{domain}]')
 
 
 if __name__ == '__main__':
