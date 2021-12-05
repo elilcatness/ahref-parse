@@ -11,7 +11,7 @@ from selenium.webdriver.common.by import By
 
 from constants import *
 from exceptions import *
-from utils import get_driver, get_cookies, get_data, write_data
+from utils import get_driver, get_data, write_data
 
 
 def auth(driver: Chrome, login: str, password: str):
@@ -56,20 +56,34 @@ def main():
         if not domains:
             raise FileIsEmptyException(f'Файл {os.getenv("domains_filename")} пуст')
         domains_count = len(domains)
+    third_party_source = True
     driver = get_driver()
     with open(os.getenv('credentials_filename'), encoding='utf-8') as f:
+        lines = [x.strip() for x in f.readlines()]
+        if len(lines) > 1:
+            third_party_source = True
+            login_url = lines[0]
+            base_url = os.getenv('keywords_fmt') % (lines[1].rstrip('/'), mode)
+        else:
+            base_url = os.getenv('keywords_fmt') % (os.getenv('base_url').rstrip('/'), mode)
         try:
-            login, password = f.readline().strip().split(':')
+            login, password = lines[0].split(':')
         except ValueError:
             raise InvalidFileData(f'Неверный формат данных в {os.getenv("credentials_filename")}')
-    auth(driver, login, password)
-    time.sleep(AUTH_TIMEOUT)
-    if driver.current_url == os.getenv('login_url'):
+    if not third_party_source:
         auth(driver, login, password)
+        time.sleep(AUTH_TIMEOUT)
+        if driver.current_url == os.getenv('login_url'):
+            auth(driver, login, password)
+    else:
+        driver.get(login_url)
+        print('Ожидание авторизации пользователем...')
+        while driver.current_url == login_url:
+            pass
     print('Авторизация прошла успешно...')
     output_filename = os.getenv('output_filename')
     for i, domain in enumerate(domains):
-        data = get_data(driver, os.getenv('base_url'), domain, mode)
+        data = get_data(driver, base_url, domain, mode)
         if not data:
             print(f'[{dt.now().strftime("%H:%M:%S")}] {domain} пуст')
         else:
