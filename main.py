@@ -52,11 +52,11 @@ def main():
     if not mode:
         exit(-1)
     with open(os.getenv('domains_filename'), encoding='utf-8') as f:
-        domains = f.readlines()
+        domains = [x.strip() for x in f.readlines()]
         if not domains:
             raise FileIsEmptyException(f'Файл {os.getenv("domains_filename")} пуст')
         domains_count = len(domains)
-    third_party_source = True
+    third_party_source = False
     driver = get_driver()
     with open(os.getenv('credentials_filename'), encoding='utf-8') as f:
         lines = [x.strip() for x in f.readlines()]
@@ -83,7 +83,9 @@ def main():
     print('Авторизация прошла успешно...')
     output_filename = os.getenv('output_filename')
     for i, domain in enumerate(domains):
-        data = get_data(driver, base_url, domain, mode)
+        callback, data = get_data(driver, base_url, domain)
+        if callback == 'limit-reached':
+            return print('Лимит превышен, завершение работы')
         if not data:
             print(f'[{dt.now().strftime("%H:%M:%S")}] {domain} пуст')
         else:

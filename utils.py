@@ -2,13 +2,13 @@ import csv
 from datetime import date
 
 from dateutil.relativedelta import relativedelta
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as exp_cond
 from selenium.webdriver.support.wait import WebDriverWait
 from seleniumwire.webdriver import Chrome, ChromeOptions
 
-from constants import COOKIES_TIMEOUT, BUTTON_TIMEOUT
+from constants import COOKIES_TIMEOUT, BUTTON_TIMEOUT, LOAD_TIMEOUT
 from exceptions import CookiesTimeoutException
 
 
@@ -40,38 +40,55 @@ def _get_dates_for_api():
     return actual_date.isoformat(), compared_with_date.isoformat()
 
 
-def get_data(driver: Chrome, url: str, domain: str, mode: str):
+def get_data(driver: Chrome, url: str, domain: str):
     driver.get(url + domain)
+    if 'Sorry! your daily' in driver.page_source:
+        return 'limit-reached', None
+    header = WebDriverWait(driver, LOAD_TIMEOUT).until(exp_cond.presence_of_element_located((
+        By.XPATH,
+        '//h4[@class="css-a5m6co-text css-p8ym46-fontFamily css-11397xj-fontSize '
+        'css-1wmho6b-fontWeight css-mun6jo-color css-15qzf5r-display"]'
+    )))
+    if header.text.strip().lower() == '0 ключевых слов' or header.text.strip().lower() == '0 keywords':
+        return None, None
     try:
-        if WebDriverWait(driver, BUTTON_TIMEOUT).until(exp_cond.presence_of_element_located((
-                By.XPATH,
-                '//div[@class="css-1m3jbw6-dropdown '
-                'css-mkifqh-dropdownMenuWidth css-1sspey-dropdownWithControl"]/button'
-        ))):
-            return None
-    except TimeoutException:
-        try:
-            btn = WebDriverWait(driver, BUTTON_TIMEOUT).until(exp_cond.presence_of_element_located((
-                By.XPATH,
-                '//div[@class="css-1m3jbw6-dropdown '
-                'css-mkifqh-dropdownMenuWidth css-1sspey-dropdownWithControl"]/button')))
-            WebDriverWait(driver, BUTTON_TIMEOUT).until(exp_cond.element_to_be_clickable(btn))
-            btn.click()
-        except TimeoutException:
-            return None
-    data = {}
-    for row in driver.find_elements(
+        btn = WebDriverWait(driver, BUTTON_TIMEOUT).until(exp_cond.presence_of_element_located((
             By.XPATH,
-            '//div[@class="css-131jr5s-row css-13wqkl7-row css-13n3pes-rowLayout css-87ebjr-rowAlign"]'):
+            '//div[@class="css-1m3jbw6-dropdown '
+            'css-mkifqh-dropdownMenuWidth css-1sspey-dropdownWithControl"]/button')))
+        WebDriverWait(driver, BUTTON_TIMEOUT).until(exp_cond.element_to_be_clickable(btn))
+        btn.click()
+    except TimeoutException:
+        return None, None
+    data = {}
+    rows = WebDriverWait(driver, LOAD_TIMEOUT).until(exp_cond.presence_of_all_elements_located((
+        By.XPATH,
+        '//div[@class="css-131jr5s-row css-13wqkl7-row css-13n3pes-rowLayout css-87ebjr-rowAlign"]'
+    )))
+    for row in rows:
         country = row.find_element(
             By.XPATH,
             './/div[@class="css-a5m6co-text css-p8ym46-fontFamily css-11397xj-fontSize css-15qzf5r-display"]').text
-        count = int(row.find_element(
-            By.XPATH,
-            './/div[@class="css-1ckph53-badge css-z4csn1-ghost css-m40bx0-rounded '
-            'css-1whhpic-padding css-xtgw0q-height-medium"]').text)
+        try:
+            count_raw = row.find_element(
+                By.XPATH,
+                './/div[@class="css-1ckph53-badge css-z4csn1-ghost css-m40bx0-rounded '
+                'css-1wh4hpic-padding css-xtgw0q-height-medium"]').text
+        except NoSuchElementException:
+            count_raw = row.find_element(
+                By.XPATH,
+                './/div[@class="css-a5m6co-text css-10st79w-fontFamily css-1s1cif8-fontSize '
+                'css-15qzf5r-display"]').text
+        if count_raw.endswith('B'):
+            count = int(float(count_raw.replace('B', '')) * 10 ** 9)
+        elif count_raw.endswith('M'):
+            count = int(float(count_raw.replace('M', '')) * 10 ** 6)
+        elif count_raw.endswith('K'):
+            count = int(float(count_raw.replace('K', '')) * 10 ** 3)
+        else:
+            count = int(count_raw)
         data[country] = count
-    return {'Domains': domain, **data}
+    return None, {'Domains': domain, **data}
 
 
 def write_data(data: dict, filename: str, mode: str, delimiter=';'):
